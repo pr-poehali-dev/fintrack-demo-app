@@ -54,6 +54,8 @@ const Index = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [isScannerActive, setIsScannerActive] = useState(false);
 
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const monthlyBudget = categories.reduce((sum, cat) => sum + cat.limit, 0);
@@ -79,6 +81,42 @@ const Index = () => {
     setIsEditCategoryOpen(false);
     setEditingCategory(null);
     toast.success('Категория обновлена');
+  };
+
+  const handleQrScan = (data: string | null) => {
+    if (!data) return;
+
+    try {
+      const qrData = JSON.parse(data);
+      const amount = qrData.s || qrData.sum || qrData.amount;
+      const description = qrData.n || qrData.name || 'Покупка по QR';
+      
+      if (amount) {
+        setNewExpense({
+          categoryId: '1',
+          amount: amount.toString(),
+          description: description,
+        });
+        setIsQrScannerOpen(false);
+        setIsScannerActive(false);
+        setIsDialogOpen(true);
+        toast.success('QR-код распознан!');
+      } else {
+        toast.error('Не удалось распознать сумму в QR-коде');
+      }
+    } catch (error) {
+      toast.error('Неверный формат QR-кода');
+    }
+  };
+
+  const handleQrError = (error: Error) => {
+    console.error('QR Scanner Error:', error);
+    toast.error('Ошибка доступа к камере');
+  };
+
+  const toggleScanner = () => {
+    setIsQrScannerOpen(!isQrScannerOpen);
+    setIsScannerActive(!isScannerActive);
   };
 
   const handleAddExpense = () => {
@@ -112,13 +150,24 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Мои Финансы</h1>
             <p className="text-muted-foreground mt-1">Контроль личных расходов</p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <div className="flex gap-2">
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="gap-2 hover:scale-105 transition-transform"
+              onClick={toggleScanner}
+            >
+              <Icon name="QrCode" size={20} />
+              Сканировать QR
+            </Button>
+            
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button size="lg" className="gap-2 hover:scale-105 transition-transform">
                 <Icon name="Plus" size={20} />
@@ -207,7 +256,84 @@ const Index = () => {
               )}
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        {isQrScannerOpen && (
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Сканирование QR-кода</CardTitle>
+                  <CardDescription>Наведите камеру на QR-код чека</CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={toggleScanner}>
+                  <Icon name="X" size={20} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isScannerActive && (
+                <div className="relative aspect-square w-full max-w-md mx-auto bg-muted rounded-lg overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center space-y-4">
+                      <Icon name="Camera" size={64} className="mx-auto text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Камера загружается...</p>
+                        <p className="text-xs text-muted-foreground mt-2">Разрешите доступ к камере в браузере</p>
+                      </div>
+                    </div>
+                  </div>
+                  <video
+                    id="qr-video"
+                    className="w-full h-full object-cover"
+                    autoPlay
+                    playsInline
+                    onLoadedMetadata={(e) => {
+                      const video = e.currentTarget;
+                      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                        navigator.mediaDevices.getUserMedia({ 
+                          video: { facingMode: 'environment' } 
+                        })
+                        .then((stream) => {
+                          video.srcObject = stream;
+                        })
+                        .catch((err) => handleQrError(err));
+                      }
+                    }}
+                  />
+                  <div className="absolute inset-0 border-4 border-primary/50 m-12 rounded-lg pointer-events-none" />
+                </div>
+              )}
+              
+              <div className="mt-4 space-y-3">
+                <div className="flex items-start gap-2 p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                  <Icon name="Info" size={16} className="text-blue-600 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-900">Как использовать:</p>
+                    <ul className="text-blue-800 mt-1 space-y-1 text-xs">
+                      <li>• Наведите камеру на QR-код чека</li>
+                      <li>• Дождитесь автоматического распознавания</li>
+                      <li>• Проверьте данные и сохраните расход</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full gap-2"
+                  onClick={() => {
+                    const testData = JSON.stringify({ s: 1250, n: 'Тестовая покупка' });
+                    handleQrScan(testData);
+                  }}
+                >
+                  <Icon name="TestTube" size={16} />
+                  Тест: добавить покупку 1250₽
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid md:grid-cols-3 gap-4">
           <Card className="animate-fade-in hover:shadow-lg transition-shadow">
