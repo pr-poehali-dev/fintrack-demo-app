@@ -28,7 +28,7 @@ interface Expense {
 }
 
 const Index = () => {
-  const [categories] = useState<Category[]>([
+  const [categories, setCategories] = useState<Category[]>([
     { id: '1', name: 'Продукты', icon: 'ShoppingCart', color: '#0EA5E9', limit: 15000 },
     { id: '2', name: 'Транспорт', icon: 'Car', color: '#8B5CF6', limit: 5000 },
     { id: '3', name: 'Развлечения', icon: 'Gamepad2', color: '#F97316', limit: 10000 },
@@ -52,6 +52,8 @@ const Index = () => {
   });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
   const monthlyBudget = categories.reduce((sum, cat) => sum + cat.limit, 0);
@@ -61,6 +63,22 @@ const Index = () => {
     return expenses
       .filter(exp => exp.categoryId === categoryId)
       .reduce((sum, exp) => sum + exp.amount, 0);
+  };
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setIsEditCategoryOpen(true);
+  };
+
+  const handleSaveCategory = () => {
+    if (!editingCategory) return;
+    
+    setCategories(categories.map(c => 
+      c.id === editingCategory.id ? editingCategory : c
+    ));
+    setIsEditCategoryOpen(false);
+    setEditingCategory(null);
+    toast.success('Категория обновлена');
   };
 
   const handleAddExpense = () => {
@@ -156,6 +174,39 @@ const Index = () => {
               </div>
             </DialogContent>
           </Dialog>
+
+          <Dialog open={isEditCategoryOpen} onOpenChange={setIsEditCategoryOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Редактировать категорию</DialogTitle>
+                <DialogDescription>Измените название и лимит категории</DialogDescription>
+              </DialogHeader>
+              {editingCategory && (
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Название</Label>
+                    <Input 
+                      id="edit-name" 
+                      value={editingCategory.name}
+                      onChange={(e) => setEditingCategory({...editingCategory, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-limit">Месячный лимит (₽)</Label>
+                    <Input 
+                      id="edit-limit" 
+                      type="number"
+                      value={editingCategory.limit}
+                      onChange={(e) => setEditingCategory({...editingCategory, limit: parseFloat(e.target.value) || 0})}
+                    />
+                  </div>
+                  <Button className="w-full" onClick={handleSaveCategory}>
+                    Сохранить изменения
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
 
         <div className="grid md:grid-cols-3 gap-4">
@@ -227,12 +278,22 @@ const Index = () => {
                             <CardDescription>Лимит: {category.limit.toLocaleString('ru-RU')} ₽</CardDescription>
                           </div>
                         </div>
-                        {isNearLimit && (
-                          <Badge variant="destructive" className="gap-1">
-                            <Icon name="AlertTriangle" size={12} />
-                            Лимит
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {isNearLimit && (
+                            <Badge variant="destructive" className="gap-1">
+                              <Icon name="AlertTriangle" size={12} />
+                              Лимит
+                            </Badge>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleEditCategory(category)}
+                          >
+                            <Icon name="Settings" size={16} />
+                          </Button>
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
